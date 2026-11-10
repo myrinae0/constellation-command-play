@@ -2,6 +2,7 @@
 
 import { h, icon } from '../dom.js';
 import { SAVE_VERSION } from '../../core/save.js';
+import { replayTutorial } from '../../systems/tutorial.js';
 
 export const settingsScreen = {
   back: 'hub',
@@ -28,16 +29,27 @@ export const settingsScreen = {
       'div',
       { class: 'stack' },
       h('div', { class: 'row' }, h('button', { class: 'btn ghost icon-only', 'aria-label': 'Back', onclick: () => app.go('hub') }, icon('back')), h('h1', { style: { margin: 0 } }, 'Settings')),
-      h('div', { class: 'card stack' }, h('h2', null, 'Sound'), h('p', { class: 'small muted' }, 'The ship\'s bell.'), seg('sound', [[true, 'On'], [false, 'Off']])),
-      h('div', { class: 'card stack' }, h('h2', null, 'Motion'), h('p', { class: 'small muted' }, 'Auto follows your device\'s reduced-motion setting.'), seg('motion', [['auto', 'Auto'], ['reduce', 'Reduced']])),
-      h('div', { class: 'card stack' }, h('h2', null, 'Battle speed'), seg('speed', [[1, '1×'], [2, '2×'], [4, '4×']])),
+      h(
+        'div',
+        { class: 'card stack' },
+        h('div', { class: 'row spread' }, h('h2', { style: { margin: 0 } }, 'Sound'), seg('sound', [[true, 'On'], [false, 'Off']])),
+        h('div', { class: 'row spread' }, h('h2', { style: { margin: 0 }, title: "Auto follows your device's reduced-motion setting" }, 'Motion'), seg('motion', [['auto', 'Auto'], ['reduce', 'Reduced']])),
+        h('div', { class: 'row spread' }, h('h2', { style: { margin: 0 } }, 'Battle speed'), seg('speed', [[1, '1×'], [2, '2×'], [4, '4×']])),
+      ),
       h(
         'div',
         { class: 'card stack' },
         h('h2', null, 'Progress'),
         h('p', { class: 'small muted' }, app.saver.persistent ? 'Saved automatically in this browser after every action.' : 'Storage is unavailable here, so progress lasts only until you close the page.'),
         h('p', { class: 'tiny dim' }, `Save format v${SAVE_VERSION} · run seed ${s.seed}`),
-        h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => app.go('intro') }, 'Replay intro'), h('button', { class: 'btn', onclick: () => app.go('title') }, 'Title screen'), h('button', { class: 'btn danger', onclick: reset }, 'Reset progress')),
+        h(
+          'div',
+          { class: 'row' },
+          h('button', { class: 'btn', onclick: () => { replayTutorial(s); app.commit(); app.go('hub'); } }, 'Replay tutorial'),
+          h('button', { class: 'btn', onclick: () => app.go('intro') }, 'Replay intro'),
+          h('button', { class: 'btn', onclick: () => app.go('title') }, 'Title screen'),
+          h('button', { class: 'btn danger', onclick: reset }, 'Reset progress'),
+        ),
       ),
       h('p', { class: 'tiny dim' }, 'Keys: 1–5 switch sections · Esc goes back · in battle, Space pauses, F changes speed, S skips.'),
     );

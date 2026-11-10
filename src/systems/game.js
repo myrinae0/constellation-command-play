@@ -8,15 +8,18 @@ import { createNewState, addLog, worldRng } from '../core/state.js';
 import { makeUnit } from './roster.js';
 import { createTruth } from './truths.js';
 import { fade, ringBell } from './ships.js';
-import { refreshBoard, resolveMission } from './missions.js';
+import { generateMission, refreshBoard, resolveMission } from './missions.js';
+import { startTutorial } from './tutorial.js';
 import { pickTruthSource } from './truths.js';
 
 /**
  * A new run: four Constellation members (one per archetype), a ship at the
- * dock, and Janice's first board.
+ * dock, and Janice's first board. With `tutorial`, the guided first run
+ * starts and an easy first mission tops the board.
  * @param {number} seed
+ * @param {{tutorial?: boolean}} [opts]
  */
-export function newGame(seed) {
+export function newGame(seed, { tutorial = false } = {}) {
   const state = createNewState(seed);
   const rng = worldRng(state);
   for (const archetype of ['shard', 'trace', 'axis', 'remnant']) {
@@ -25,6 +28,10 @@ export function newGame(seed) {
     unit.truthId = createTruth(state, pickTruthSource(state, rng), { carrierId: unit.id, origin: 'arrival' }).id;
   }
   ringBell(state, rng); // the bell from the intro
+  if (tutorial) {
+    startTutorial(state);
+    state.missions.push(generateMission(state, rng, { tutorial: true }));
+  }
   refreshBoard(state, rng);
   addLog(state, 'You took up the ledger in the Stacks.');
   return state;

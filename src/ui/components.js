@@ -4,8 +4,7 @@
 import { h, icon, archMark, bar } from './dom.js';
 import { classOf, ARCHETYPES, PATHS, xpToNext } from '../data/classes.js';
 import { MISSION_TYPES } from '../data/missions.js';
-import { ENEMIES } from '../data/enemies.js';
-import { unitStats, unitStatus, sealedTruthsOf } from '../systems/roster.js';
+import { unitStats, unitStatus } from '../systems/roster.js';
 import { districtDef } from '../systems/city.js';
 import { truthDef } from '../systems/truths.js';
 import { ringBell } from './audio.js';
@@ -36,13 +35,20 @@ export function unitLabel(unit) {
   return `${cls.name} (${ARCHETYPES[unit.archetype].name}${unit.path === 'none' ? '' : `, ${PATHS[unit.path].name}`})`;
 }
 
+/** Two key numbers for cards; the rest is in the detail sheet. */
+export function keyStats(stats) {
+  return h('div', { class: 'stats' }, h('span', null, 'HP ', h('b', null, stats.hp)), h('span', null, 'ATK ', h('b', null, stats.atk)));
+}
+
 /**
- * A compact unit summary: mark, name, class, level, optional status.
- * @param {{status?: boolean, xp?: boolean}} [opts]
+ * A compact unit summary: mark, name, level, class, HP and ATK. Status shows
+ * only when the unit is not ready.
+ * @param {{status?: boolean, xp?: boolean, full?: boolean}} [opts]
  */
 export function unitSummary(state, unit, opts = { status: true }) {
   const cls = classOf(unit.archetype, unit.path);
-  const letters = sealedTruthsOf(state, unit).length;
+  const stats = unitStats(state, unit);
+  const notReady = opts.status && unitStatus(state, unit) !== 'ready';
   return h(
     'div',
     { class: 'who' },
@@ -51,29 +57,31 @@ export function unitSummary(state, unit, opts = { status: true }) {
       'div',
       { class: 'grow' },
       h('div', { class: 'row spread' }, h('strong', null, unit.name), h('span', { class: 'tiny muted' }, `Lv ${unit.level}`)),
-      h('div', { class: 'small muted' }, cls.name, unit.forgeTier ? ` · forge ${unit.forgeTier}` : '', letters ? ` · ${plural(letters, 'sealed letter')}` : ''),
+      h('div', { class: 'row spread' }, h('span', { class: 'small muted' }, cls.name), opts.full ? null : keyStats(stats)),
+      opts.full ? statsLine(stats) : null,
       opts.xp ? bar(unit.xp / xpToNext(unit.level), 'xp', 'Experience') : null,
-      statsLine(unitStats(state, unit)),
-      opts.status ? h('div', { style: { marginTop: '4px' } }, statusChip(state, unit)) : null,
+      notReady ? h('div', { style: { marginTop: '4px' } }, statusChip(state, unit)) : null,
     ),
   );
 }
 
 const TYPE_ICON = { push: 'fog', rescue: 'roster', gear: 'forge', truth: 'letter' };
 
-/** A mission on Janice's board. */
+/** A mission on Janice's board: what, where, how dangerous, how long. */
 export function missionCard(state, mission, onOpen) {
   const type = MISSION_TYPES[mission.type];
   const d = districtDef(mission.district);
-  const enemyNames = [...new Set(mission.enemies.map((e) => (ENEMIES[e].boss ? d.boss.name : ENEMIES[e].name)))];
   const left = mission.expires - state.watch;
   return h(
     'button',
-    { class: 'card tap', onclick: onOpen, 'aria-label': `${type.name} in ${d.name}, danger level ${mission.level}` },
+    { class: 'card tap', onclick: onOpen, 'data-tut': 'mission', 'aria-label': `${type.name} in ${d.name}, danger level ${mission.level}` },
     h('div', { class: 'row spread' }, h('strong', null, icon(TYPE_ICON[mission.type]), ' ', type.name), h('span', { class: `chip ${mission.level >= 6 ? 'grim' : mission.level >= 4 ? 'thin' : 'even'}` }, `Danger ${mission.level}`)),
-    h('div', { class: 'small', style: { marginTop: '4px' } }, d.name, mission.boss ? h('span', { class: 'chip danger', style: { marginLeft: '6px' } }, d.boss.name) : null),
-    h('div', { class: 'tiny muted', style: { marginTop: '4px' } }, `${mission.enemies.length} in the fog: ${enemyNames.join(', ')}`),
-    h('div', { class: 'tiny dim', style: { marginTop: '2px' } }, left <= 0 ? 'Leaves the board after this watch' : `On the board for ${plural(left + 1, 'more watch', 'more watches')}`),
+    h(
+      'div',
+      { class: 'row spread small muted', style: { marginTop: '4px' } },
+      h('span', null, d.name, mission.boss ? h('span', { class: 'chip danger', style: { marginLeft: '6px' } }, d.boss.name) : null),
+      h('span', { class: 'tiny dim' }, left <= 0 ? 'Last watch' : `${plural(left + 1, 'watch', 'watches')} left`),
+    ),
   );
 }
 

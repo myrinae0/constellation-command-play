@@ -22,14 +22,12 @@ export const archiveScreen = {
     return h(
       'div',
       { class: 'stack' },
-      h('h1', null, 'The Archive'),
-      h('p', { class: 'muted small' }, 'Pale stone that hums when you speak. Every Truth is written twice: once for the Archive, once for the city.'),
+      h('div', { class: 'row spread' }, h('h1', { style: { margin: 0 } }, 'The Archive'), h('span', { class: 'small muted' }, `${s.stats.recorded} spoken · ${sealed.length} kept · ${hidden.length} unremembered`)),
       speech(who, line),
-      h('div', { class: 'row' }, h('span', { class: 'chip accent' }, `Spoken ${s.stats.recorded}`), h('span', { class: 'chip' }, `Kept ${sealed.length}`), h('span', { class: 'chip' }, `Unremembered ${hidden.length}`)),
       h(
         'section',
-        { class: 'section stack' },
-        h('h2', null, icon('letter'), 'Waiting for a decision'),
+        { class: 'stack' },
+        h('h2', null, icon('letter'), ' Waiting for a decision'),
         pending.length ? pending.map((t) => decisionCard(app, t)) : h('p', { class: 'empty' }, 'No letters waiting. Arrivals remember their Truth after their first time in the fog.'),
       ),
       h(
@@ -39,8 +37,8 @@ export const archiveScreen = {
         sealed.length
           ? h('div', { class: 'list cols' }, sealed.map((t) => sealedCard(app, t)))
           : h('p', { class: 'empty' }, 'Constellation carries no sealed letters yet.'),
-        h('div', { class: 'card' }, h('strong', null, 'Your own letter'), h('p', { class: 'quote small', style: { margin: '6px 0 0' } }, PLAYER_LETTER.text)),
       ),
+      h('details', { class: 'section' }, h('summary', null, 'Your own letter'), h('p', { class: 'quote small' }, PLAYER_LETTER.text)),
       h(
         'details',
         { class: 'section' },
@@ -93,23 +91,16 @@ function decisionCard(app, t) {
     h('p', { class: 'small muted', style: { margin: 0 } }, carrierText(s, t)),
     h(
       'div',
-      { class: 'grid2' },
-      h(
-        'div',
-        { class: 'card', style: { background: 'var(--bg2)' } },
-        h('h3', null, 'Record it'),
-        h('p', { class: 'small' }, def.record.note),
-        h('p', { class: 'tiny dim' }, 'Permanent. The city map changes.'),
-        h('button', { class: 'btn primary block', disabled: !canRecord(t), onclick: record }, 'Have the Archive record it'),
-      ),
-      h(
-        'div',
-        { class: 'card', style: { background: 'var(--bg2)' } },
-        h('h3', null, 'Keep it sealed'),
-        h('p', { class: 'small' }, def.seal.note),
-        h('p', { class: 'tiny dim' }, `${carrier ? carrier.name : 'Its carrier'}: ${statText(def.seal.stats)}, and held together once per battle. You can still record it later.`),
-        h('button', { class: 'btn block', disabled: !canSeal(t), onclick: seal }, 'Keep it sealed'),
-      ),
+      { class: 'row choice' },
+      h('button', { class: 'btn primary grow', disabled: !canRecord(t), onclick: record }, 'Record it'),
+      h('button', { class: 'btn grow', disabled: !canSeal(t), onclick: seal }, 'Keep it sealed'),
+    ),
+    h(
+      'details',
+      null,
+      h('summary', null, 'What each choice does'),
+      h('p', { class: 'small' }, h('strong', null, 'Record: '), def.record.note, h('span', { class: 'dim' }, ' Permanent. The city map changes.')),
+      h('p', { class: 'small', style: { margin: 0 } }, h('strong', null, 'Keep sealed: '), def.seal.note, h('span', { class: 'dim' }, ` ${carrier ? carrier.name : 'Its carrier'} gets ${statText(def.seal.stats)} and is held together once per battle. You can still record it later.`)),
     ),
   );
 }
@@ -142,9 +133,8 @@ function sealedCard(app, t) {
   return h(
     'div',
     { class: `card ${def.weight === 'heavy' ? 'heavy' : ''}` },
-    truthHeader(t),
-    h('p', { class: 'tiny muted' }, `Carried by ${carrier ? carrier.name : 'no one'} · ${statText(def.seal.stats)}`),
-    h('button', { class: 'btn block', onclick: open }, 'Open it for the Archive'),
+    h('p', { class: 'quote small', style: { margin: 0 } }, `“${def.text}”`),
+    h('div', { class: 'row spread', style: { marginTop: '8px' } }, h('span', { class: 'tiny muted' }, `${carrier ? carrier.name : 'No one'} · ${statText(def.seal.stats)}`), h('button', { class: 'btn', onclick: open }, 'Open it')),
   );
 }
 
@@ -154,7 +144,7 @@ function showShift(app, def, changes, heavy) {
   app.openSheet('The city shifts', (close) => [
     speech(who, line),
     changes.length ? h('ul', { class: 'small', style: { paddingLeft: '18px', margin: 0 } }, changes.map((c) => h('li', null, c))) : null,
-    h('p', { class: 'small muted' }, def.record.note),
+    changes.length ? null : h('p', { class: 'small muted' }, def.record.note),
     h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: () => (close(), app.go('city', { focus: def.district })) }, icon('map'), 'See the map'), h('button', { class: 'btn', onclick: close }, 'Stay here')),
   ]);
 }

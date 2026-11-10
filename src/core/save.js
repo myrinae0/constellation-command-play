@@ -6,8 +6,10 @@
 // saves are filled from defaults on load (fillDefaults), no migration needed.
 // Renaming or reshaping a field: bump SAVE_VERSION and add a migration below.
 
+import { earnedUnlocks } from '../systems/unlocks.js';
+
 export const SAVE_KEY = 'constellation-command/save';
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /**
  * Migrations from version N to N+1. Each receives the old save and a context
@@ -18,6 +20,13 @@ export const MIGRATIONS = {
   // Version 0 = a save written before versioning (or a hand-edited one).
   // Keep what it has; fillDefaults() supplies the rest.
   0: (save) => ({ ...save, version: 1 }),
+  // Version 2 added the guided first run and step-by-step unlocks. A save
+  // from before then has already been played: skip the tutorial, and count
+  // the intro cards for everything it has earned as seen.
+  1: (save) => {
+    const stats = { missions: 0, recorded: 0, ...(save.stats || {}) };
+    return { ...save, tutorial: { step: 0, done: true }, unlocksSeen: earnedUnlocks({ ...save, stats }) };
+  },
 };
 
 /**

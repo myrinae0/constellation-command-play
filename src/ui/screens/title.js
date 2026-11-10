@@ -9,7 +9,7 @@ export const titleScreen = {
     const hasSave = app.saver.hasSave();
     const start = () => {
       const seed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0;
-      app.store.set(newGame(seed));
+      app.store.set(newGame(seed, { tutorial: true }));
       app.commit();
       app.go('intro');
     };

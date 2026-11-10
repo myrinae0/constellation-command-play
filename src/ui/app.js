@@ -7,6 +7,8 @@
 import { h, icon, clear } from './dom.js';
 import { pendingTruths } from '../systems/truths.js';
 import { bellEstimate } from '../systems/ships.js';
+import { isUnlocked } from '../systems/unlocks.js';
+import { createGuide } from './guide.js';
 
 export const TABS = [
   { id: 'hub', label: 'Stacks', icon: 'stacks' },
@@ -42,9 +44,13 @@ export function createApp({ store, bus, saver, screens, debug = false }) {
     get screen() {
       return current;
     },
-    /** Show a screen. */
+    get screenDef() {
+      return screens[current.id];
+    },
+    /** Show a screen. Sections that are still locked fall back to the Stacks. */
     go(id, params = {}) {
       if (!screens[id]) throw new Error(`unknown screen ${id}`);
+      if (store.state && !isUnlocked(store.state, id)) id = 'hub';
       closeSheet();
       current = { id, params };
       render(false);
@@ -67,6 +73,8 @@ export function createApp({ store, bus, saver, screens, debug = false }) {
       return store.state?.settings?.motion === 'reduce' || matchMedia('(prefers-reduced-motion: reduce)').matches;
     },
   };
+
+  const guide = createGuide(app, { screenEl, tabsEl });
 
   bus.on('state', () => {
     applySettings();
@@ -99,6 +107,7 @@ export function createApp({ store, bus, saver, screens, debug = false }) {
       window.__reportError?.(`render ${current.id}: ${err && err.stack}`);
       screenEl.append(h('div', { class: 'pad' }, h('h1', null, 'Something went wrong'), h('p', { class: 'muted' }, String(err && err.message)), h('button', { class: 'btn', onclick: () => app.go('hub') }, 'Back to the Stacks')));
     }
+    guide.apply();
     screenEl.scrollTop = scroll;
   }
 
@@ -122,12 +131,17 @@ export function createApp({ store, bus, saver, screens, debug = false }) {
     );
     const activeTab = screens[current.id]?.tab || current.id;
     const letters = pendingTruths(state).length;
-    for (const tab of TABS) {
+    // Locked sections are hidden, not greyed out. With only the Stacks open
+    // there is nothing to switch to, so the tab bar hides too.
+    const open = TABS.filter((tab) => isUnlocked(state, tab.id));
+    tabsEl.hidden = open.length < 2;
+    tabsEl.style.setProperty('--tabs', String(open.length));
+    for (const tab of open) {
       const badge = tab.id === 'archive' && letters ? h('span', { class: 'badge', 'aria-label': `${letters} waiting` }, letters) : null;
       tabsEl.append(
         h(
           'button',
-          { class: 'tab', 'aria-current': activeTab === tab.id ? 'page' : null, onclick: () => app.go(tab.id) },
+          { class: 'tab', 'data-tab': tab.id, 'aria-current': activeTab === tab.id ? 'page' : null, onclick: () => app.go(tab.id) },
           icon(tab.icon),
           h('span', null, tab.label),
           badge,
@@ -186,8 +200,10 @@ export function createApp({ store, bus, saver, screens, debug = false }) {
       if (back) app.go(back);
       return;
     }
+    // 1–5 keep their places (1 Stacks … 5 Workshop); locked ones do nothing.
     if (!sheet && store.state && !screens[current.id]?.full && /^[1-5]$/.test(e.key)) {
-      app.go(TABS[Number(e.key) - 1].id);
+      const tab = TABS[Number(e.key) - 1];
+      if (isUnlocked(store.state, tab.id)) app.go(tab.id);
     }
   });
 

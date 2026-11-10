@@ -4,6 +4,10 @@
 //
 // Screens: title, intro, hub, squad, battle, debrief, city, archive, roster,
 // workshop, settings, ending.
+// New-player states:
+//   tutorial&step=<dock|board|squad|battle|debrief>  the guided first run
+//   newgame                       a new game with the tutorial skipped (only the Stacks)
+//   unlock&what=<archive|city|roster|workshop>  that section just opened (intro card)
 
 import { newGame, deployMission, keepWatch } from './systems/game.js';
 import { autoSquad, assessOdds } from './systems/missions.js';
@@ -14,6 +18,9 @@ import { mentorCost, raiseMentor, train, trainingOptions } from './systems/train
 import { canAfford } from './systems/economy.js';
 import { KEEPSAKES } from './data/gear.js';
 import { newId } from './core/state.js';
+import { TUTORIAL_STEPS, skipTutorial } from './systems/tutorial.js';
+import { UNLOCKS } from './systems/unlocks.js';
+import { openUnit } from './ui/screens/roster.js';
 
 /** Play `missions` missions with simple choices. */
 export function autoplay(state, missions) {
@@ -55,6 +62,9 @@ function letters(state, ids) {
 
 export function runDebug(app, screen, seed) {
   if (screen === 'title') return app.go('title');
+  const params = new URLSearchParams(location.search);
+  if (screen === 'tutorial' || screen === 'newgame') return newPlayer(app, screen, seed, params.get('step') || 'dock');
+  if (screen === 'unlock') return unlockState(app, seed, params.get('what') || 'archive');
   const state = newGame(seed);
   state.flags.introSeen = true;
   state.settings.sound = false;
@@ -63,6 +73,7 @@ export function runDebug(app, screen, seed) {
     return app.go('intro');
   }
   autoplay(state, screen === 'ending' ? 30 : 8);
+  state.unlocksSeen = UNLOCKS.map((u) => u.id);
   // A keepsake or two for the forge screen.
   for (const def of KEEPSAKES.slice(0, 2)) {
     if (!state.keepsakes.some((k) => k.defId === def.id)) state.keepsakes.push({ id: newId(state, 'k'), defId: def.id, unitId: null });
@@ -97,7 +108,56 @@ export function runDebug(app, screen, seed) {
     case 'ending':
       state.flags.v1Complete = true;
       return app.go('ending');
+    case 'roster':
+      app.go('roster');
+      // ?debug=roster&sheet=1 opens the first member's detail sheet.
+      if (new URLSearchParams(location.search).get('sheet')) openUnit(app, app.state.units[0].id);
+      return;
     default:
-      return app.go(app.screen && screen in { hub: 1, roster: 1, workshop: 1, settings: 1 } ? screen : 'hub');
+      return app.go(app.screen && screen in { hub: 1, workshop: 1, settings: 1 } ? screen : 'hub');
   }
+}
+
+/** A brand-new game, guided (at a given tutorial step) or with the tutorial skipped. */
+function newPlayer(app, screen, seed, step) {
+  const state = newGame(seed, { tutorial: true });
+  state.flags.introSeen = true;
+  state.settings.sound = false;
+  app.store.set(state);
+  if (screen === 'newgame') {
+    skipTutorial(state);
+    return app.go('hub');
+  }
+  state.tutorial.step = Math.max(0, TUTORIAL_STEPS.indexOf(step));
+  const mission = state.missions.find((m) => m.tutorial) || state.missions[0];
+  if (step === 'squad') return app.go('briefing', { missionId: mission.id });
+  if (step === 'battle' || step === 'debrief') {
+    const result = deployMission(state, mission.id, autoSquad(state));
+    if ('error' in result) throw new Error(result.error);
+    app.store.set(state);
+    return step === 'battle'
+      ? app.go('battle', { battle: result.battle, report: result.report, missionTitle: 'Push back the fog · The Dock', seek: Number(params().get('at')) || 0 })
+      : app.go('debrief', { report: result.report });
+  }
+  return app.go('hub');
+}
+
+const params = () => new URLSearchParams(location.search);
+
+/** Play just far enough to earn `what`, with its intro card not yet seen. */
+function unlockState(app, seed, what) {
+  const state = newGame(seed, { tutorial: true });
+  state.flags.introSeen = true;
+  state.settings.sound = false;
+  skipTutorial(state);
+  const order = UNLOCKS.map((u) => u.id);
+  const missions = { archive: 1, city: 1, roster: 2, workshop: 3 }[what] ?? 1;
+  autoplay(state, missions);
+  if (what === 'city' && !state.stats.recorded) {
+    const t = pendingTruths(state)[0];
+    if (t) recordTruth(state, t.id);
+  }
+  state.unlocksSeen = order.filter((id) => id !== what && UNLOCKS.find((u) => u.id === id).earned(state));
+  app.store.set(state);
+  return app.go('hub');
 }

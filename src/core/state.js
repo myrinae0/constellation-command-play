@@ -52,6 +52,8 @@ import { rngOver } from './rng.js';
  * @property {{w: number, text: string}[]} log
  * @property {any} lastReport
  * @property {{sound: boolean, motion: 'auto'|'reduce'|'full', speed: number}} settings
+ * @property {{step: number, done: boolean}} tutorial  the guided first run (systems/tutorial.js)
+ * @property {string[]} unlocksSeen  unlock intro cards already shown (systems/unlocks.js)
  */
 
 /**
@@ -65,7 +67,7 @@ export function createNewState(seed = 1) {
   const districts = {};
   for (const d of DISTRICTS) districts[d.id] = { fog: d.fog, threatMod: 0, clearedWatch: null };
   return {
-    version: 1,
+    version: 2,
     seed: seed >>> 0,
     rngState: seed >>> 0,
     watch: 0,
@@ -101,6 +103,9 @@ export function createNewState(seed = 1) {
     log: [],
     lastReport: null,
     settings: { sound: true, motion: 'auto', speed: 1 },
+    // Finished by default; newGame({tutorial: true}) starts it.
+    tutorial: { step: 0, done: true },
+    unlocksSeen: [],
   };
 }
 

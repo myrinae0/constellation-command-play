@@ -6,8 +6,9 @@ import { KEEPSAKES } from '../../data/gear.js';
 import { MISSION_TYPES } from '../../data/missions.js';
 import { districtDef } from '../../systems/city.js';
 import { getTruth, truthDef } from '../../systems/truths.js';
-import { announceEvents, eventText, materials, truthHeader } from '../components.js';
-import { pickLine, speech } from '../text.js';
+import { announceEvents, eventText, materials } from '../components.js';
+import { isUnlocked } from '../../systems/unlocks.js';
+import { pickLine, speech, plural } from '../text.js';
 
 export const debriefScreen = {
   tab: 'hub',
@@ -24,7 +25,10 @@ export const debriefScreen = {
     const victory = report.outcome === 'victory';
     const thinned = report.squad.filter((x) => x.thinned);
     const lineKey = report.fog?.cleared ? 'debrief.cleared' : victory ? 'debrief.victory' : 'debrief.retreat';
-    const [who, line] = pickLine(lineKey, report.missionId, { district: d.name });
+    // One line from the cast: about whoever needs rest, if anyone does.
+    const [who, line] = thinned.length && !report.fog?.cleared
+      ? pickLine('debrief.thinned', report.missionId, { name: thinned[0].name })
+      : pickLine(lineKey, report.missionId, { district: d.name });
     const nUnits = s.units;
 
     const found = [];
@@ -32,23 +36,17 @@ export const debriefScreen = {
       const t = getTruth(s, id);
       if (!t) continue;
       const carrier = nUnits.find((u) => u.id === t.carrierId);
-      found.push(h('div', { class: `card ${truthDef(t).weight === 'heavy' ? 'heavy' : ''}` }, h('div', { class: 'small muted' }, `A lost Truth, lying in the street.${carrier ? ` ${carrier.name} carried it home.` : ''}`), truthHeader(t)));
+      found.push(h('li', null, `A lost Truth${carrier ? `, carried home by ${carrier.name}` : ''}.`));
     }
     for (const id of report.found.keepsakes) {
       const k = KEEPSAKES.find((x) => x.id === id);
-      found.push(h('div', { class: 'card' }, h('strong', null, icon('forge'), ` ${k.name}`), h('p', { class: 'small muted', style: { margin: '4px 0 0' } }, `${k.text} Brooklyn can retune it in the Workshop.`)));
+      found.push(h('li', null, `A keepsake: ${k.name}.`));
     }
-    if (report.found.rescued.length) {
-      found.push(h('div', { class: 'card' }, h('strong', null, icon('roster'), ` Rescued: ${report.found.rescued.join(', ')}`), h('p', { class: 'small muted', style: { margin: '4px 0 0' } }, 'Brought up to the Stacks, or waiting on the dock if the bunks are full.')));
-    }
-    const remembered = report.remembered.map((id) => {
-      const t = getTruth(s, id);
-      const unit = nUnits.find((u) => u.id === t?.carrierId);
-      if (!t) return null;
-      const [, text] = pickLine('remembered', id, { name: unit ? unit.name : 'Someone' });
-      return h('div', { class: `card ${truthDef(t).weight === 'heavy' ? 'heavy' : ''}` }, h('p', { class: 'small muted' }, text), truthHeader(t));
-    });
-    const anyLetters = report.found.truths.length || report.remembered.length;
+    if (report.found.rescued.length) found.push(h('li', null, `Rescued: ${report.found.rescued.join(', ')}.`));
+    const remembered = report.remembered.map((id) => getTruth(s, id)).filter(Boolean);
+    const lettersOpen = isUnlocked(s, 'archive');
+    const anyLetters = (report.found.truths.length || report.remembered.length) && lettersOpen;
+    const newLetters = report.found.truths.length + remembered.length;
 
     return h(
       'div',
@@ -56,16 +54,20 @@ export const debriefScreen = {
       h('h1', null, victory ? 'Debrief: the fog gave ground' : 'Debrief: called back'),
       h('p', { class: 'muted', style: { margin: 0 } }, `${MISSION_TYPES[report.type].name} · ${d.name}`),
       speech(who, line),
-      report.fog
-        ? h(
-            'div',
-            { class: 'card' },
-            h('div', { class: 'row spread' }, h('strong', null, icon('fog'), ` Fog in ${d.name}`), h('span', { class: 'small' }, `${report.fog.before}% → ${report.fog.after}%`)),
-            bar(report.fog.after / 100, '', `Fog in ${d.name}`),
-            report.fog.cleared ? h('p', { class: 'small', style: { color: 'var(--accent)', margin: '6px 0 0' } }, `${d.name} is clear. Look at the city map.`) : null,
-          )
-        : null,
-      h('div', { class: 'card' }, h('h3', null, 'Brought home'), materials(report.materials)),
+      h(
+        'div',
+        { class: 'card stack', 'data-tut': 'outcome' },
+        report.fog
+          ? h(
+              'div',
+              null,
+              h('div', { class: 'row spread', style: { marginBottom: '6px' } }, h('strong', null, icon('fog'), ` Fog in ${d.name}`), h('span', { class: 'small' }, `${report.fog.before}% → ${report.fog.after}%`)),
+              bar(report.fog.after / 100, '', `Fog in ${d.name}`),
+              report.fog.cleared ? h('p', { class: 'small', style: { color: 'var(--accent)', margin: '6px 0 0' } }, `${d.name} is clear.`) : null,
+            )
+          : null,
+        materials(report.materials),
+      ),
       h(
         'div',
         { class: 'card' },
@@ -76,20 +78,32 @@ export const debriefScreen = {
           report.squad.map((x) =>
             h(
               'li',
-              null,
-              h('strong', { style: { color: 'var(--text)' } }, x.name),
-              ` +${x.xp} xp`,
-              x.levels ? h('span', { class: 'chip good', style: { marginLeft: '6px' } }, `Level up${x.levels > 1 ? ` ×${x.levels}` : ''}`) : null,
-              x.held ? ' · their sealed letter held them together' : '',
-              x.thinned ? h('span', { class: 'chip thin', style: { marginLeft: '6px' } }, 'Thinned · needs rest') : null,
+              { class: 'row spread' },
+              h('span', null, h('strong', { style: { color: 'var(--text)' } }, x.name), ` +${x.xp} xp`),
+              h(
+                'span',
+                { class: 'row' },
+                x.levels ? h('span', { class: 'chip good' }, `Level up${x.levels > 1 ? ` ×${x.levels}` : ''}`) : null,
+                x.held ? h('span', { class: 'chip accent', title: 'Their sealed letter held them together' }, 'Held') : null,
+                x.thinned ? h('span', { class: 'chip thin' }, 'Needs rest') : null,
+              ),
             ),
           ),
         ),
-        thinned.length ? speech(...pickLine('debrief.thinned', report.missionId, { name: thinned[0].name })) : null,
       ),
-      found.length ? h('section', { class: 'stack' }, h('h2', null, 'Found in the fog'), found) : null,
-      remembered.length ? h('section', { class: 'stack' }, h('h2', null, icon('letter'), ' Remembered'), remembered) : null,
-      report.events?.length ? h('details', { open: true }, h('summary', null, 'Meanwhile, at the Stacks'), h('ul', { class: 'log' }, report.events.map((e) => h('li', null, eventText(e))))) : null,
+      found.length ? h('div', { class: 'card' }, h('h3', null, 'Found in the fog'), h('ul', { class: 'small', style: { margin: 0, paddingLeft: '18px' } }, found)) : null,
+      newLetters && lettersOpen
+        ? h(
+            'details',
+            { class: 'card warn' },
+            h('summary', null, icon('letter'), ` ${plural(newLetters, 'Truth')} to decide at the Archive`),
+            [...report.found.truths.map((id) => getTruth(s, id)).filter(Boolean), ...remembered].map((t) => {
+              const carrier = nUnits.find((u) => u.id === t.carrierId);
+              return h('p', { class: 'small', style: { margin: '0 0 8px' } }, h('span', { class: 'muted' }, `${carrier ? carrier.name : 'Someone'}: `), h('span', { class: 'quote' }, `“${truthDef(t).text}”`));
+            }),
+          )
+        : null,
+      report.events?.length ? h('details', null, h('summary', null, 'Meanwhile, at the Stacks'), h('ul', { class: 'log' }, report.events.map((e) => h('li', null, eventText(e))))) : null,
       h(
         'div',
         { class: 'row' },

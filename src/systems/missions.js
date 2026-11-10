@@ -22,9 +22,26 @@ const ROW = { shard: 0, trace: 1, axis: 2, remnant: 2 };
 
 /**
  * Create one mission. `type` and `district` are chosen if not given.
+ * `tutorial` makes the first mission of a guided run: a short, easy push at
+ * the Dock that stays on the board a while (it uses no world randomness).
  * @param {import('../core/rng.js').Rng} rng
  */
 export function generateMission(state, rng, opts = {}) {
+  if (opts.tutorial) {
+    return {
+      id: newId(state, 'm'),
+      type: 'push',
+      district: 'dock',
+      level: 1,
+      seed: hashSeed(state.seed, 'tutorial'),
+      enemies: ['stooped', 'lurcher'],
+      boss: false,
+      lostTruthId: null,
+      createdWatch: state.watch,
+      expires: state.watch + BALANCE.missionLifetime + 3,
+      tutorial: true,
+    };
+  }
   const type = opts.type || rng.weighted(Object.keys(MISSION_TYPES), (t) => MISSION_TYPES[t].weight);
   const candidates = DISTRICTS.filter((d) => (type === 'push' ? state.districts[d.id].fog > 0 : true));
   const district =

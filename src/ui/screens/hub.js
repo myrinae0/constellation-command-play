@@ -1,16 +1,18 @@
-// The Stacks: the bell and the dock, Janice's board, and the goal.
+// The Stacks: the dock, Janice's board, and the goal.
 
-import { h, icon, bar } from '../dom.js';
+import { h, icon, bar, archMark } from '../dom.js';
 import { BALANCE } from '../../data/missions.js';
-import { bellEstimate, freeBunks, takeIn } from '../../systems/ships.js';
+import { freeBunks, takeIn } from '../../systems/ships.js';
 import { clearedCount } from '../../systems/city.js';
 import { pendingTruths } from '../../systems/truths.js';
 import { keepWatch } from '../../systems/game.js';
-import { isAvailable, unitStats } from '../../systems/roster.js';
+import { isAvailable } from '../../systems/roster.js';
+import { reachTutorial } from '../../systems/tutorial.js';
+import { isUnlocked } from '../../systems/unlocks.js';
 import { classOf } from '../../data/classes.js';
-import { announceEvents, missionCard, statsLine } from '../components.js';
-import { archMark } from '../dom.js';
+import { announceEvents, missionCard } from '../components.js';
 import { pickLine, speech, plural } from '../text.js';
+import { openUnit } from './roster.js';
 
 export const hubScreen = {
   render(app) {
@@ -35,89 +37,82 @@ export const hubScreen = {
 function goalCard(s) {
   const cleared = clearedCount(s);
   const goal = BALANCE.goalDistricts;
-  const est = bellEstimate(s);
-  const intervals = s.ship.intervals.slice(-4);
   return h(
     'div',
     { class: 'card' },
     h(
       'div',
-      { class: 'row spread' },
+      { class: 'row spread', style: { marginBottom: '8px' } },
       h('strong', null, s.flags.v1Complete ? 'Morning has come. Hold the line.' : 'Hold the line until morning'),
       h('span', { class: 'small muted' }, `${Math.min(cleared, goal)}/${goal} districts clear`),
     ),
     bar(Math.min(1, cleared / goal), 'gold', 'Districts cleared'),
-    h(
-      'p',
-      { class: 'small muted', style: { marginTop: '8px', marginBottom: 0 } },
-      icon('bell'),
-      ' ',
-      est.exact
-        ? `Janice follows the bell rope: the next bell rings at watch ${est.next}.`
-        : `Janice expects the next bell between watch ${est.min} and ${est.max}.`,
-      intervals.length ? ` Intervals logged: ${intervals.join(' · ')}.` : '',
-    ),
   );
 }
 
 function lettersNotice(app) {
   const n = pendingTruths(app.state).length;
-  if (!n) return null;
+  if (!n || !isUnlocked(app.state, 'archive')) return null;
   return h(
     'button',
-    { class: 'card tap warn', onclick: () => app.go('archive') },
+    { class: 'card tap warn row spread', onclick: () => app.go('archive') },
     h('strong', null, icon('letter'), ` ${plural(n, 'Truth')} waiting at the Archive`),
-    h('div', { class: 'small muted' }, 'Record it and the city changes, or keep it sealed. Tap to decide.'),
+    h('span', { class: 'small muted' }, 'Decide'),
   );
 }
 
 function dockSection(app) {
   const s = app.state;
   const bunks = freeBunks(s);
-  const items = s.dock.map((a) => {
+  const items = s.dock.map((a, i) => {
     const cls = classOf(a.archetype, a.path);
     const left = a.holdUntil - s.watch;
     return h(
       'div',
       { class: 'card' },
       h(
-        'div',
-        { class: 'who' },
+        'button',
+        { class: 'who plain', onclick: () => openUnit(app, a.id), 'aria-label': `${a.name}, details` },
         archMark(a.archetype, a.path),
         h(
           'div',
           { class: 'grow' },
           h('div', { class: 'row spread' }, h('strong', null, a.name), h('span', { class: 'tiny muted' }, `Lv ${a.level}`)),
-          h('div', { class: 'small muted' }, `${cls.name} · named for ${a.noticed}`),
-          statsLine(unitStats(s, a)),
-          h('div', { class: 'tiny', style: { marginTop: '4px', color: left <= 0 ? 'var(--danger)' : 'var(--thin)' } }, left <= 0 ? 'Fading. This is the last watch they can stand.' : `Can stand for ${plural(left + 1, 'more watch', 'more watches')}.`),
-          h('p', { class: 'tiny dim', style: { margin: '2px 0 0' } }, 'Carries a Truth. They do not know how to say it yet.'),
+          h(
+            'div',
+            { class: 'row spread' },
+            h('span', { class: 'small muted' }, cls.name),
+            h('span', { class: `chip ${left <= 0 ? 'danger' : 'thin'}` }, left <= 0 ? 'Fading' : `${plural(left + 1, 'watch', 'watches')} left`),
+          ),
         ),
       ),
-      h(
-        'button',
-        {
-          class: 'btn primary block',
-          style: { marginTop: '8px' },
-          disabled: bunks <= 0,
-          onclick: () => {
-            const r = takeIn(s, a.id);
-            if (!r.ok) return app.toast(r.reason);
-            const [, text] = pickLine('takeIn', a.id, { name: a.name });
-            app.toast(text);
-            app.commit();
-          },
-        },
-        bunks > 0 ? 'Bring them up to the Stacks' : 'No free bunk',
-      ),
+      bunks > 0
+        ? h(
+            'button',
+            {
+              class: 'btn primary block',
+              style: { marginTop: '8px' },
+              'data-tut': i === 0 ? 'take-in' : null,
+              onclick: () => {
+                const r = takeIn(s, a.id);
+                if (!r.ok) return app.toast(r.reason);
+                reachTutorial(s, 'board');
+                const [, text] = pickLine('takeIn', a.id, { name: a.name });
+                app.toast(text);
+                app.commit();
+              },
+            },
+            'Bring them up',
+          )
+        : null,
     );
   });
   return h(
     'section',
-    { class: 'section' },
-    h('h2', null, icon('bell'), 'The dock'),
-    h('p', { class: 'small muted' }, `Bunks: ${s.units.length}/${s.bunks}.`, bunks <= 0 ? ' Brooklyn can bolt on a new platform in the Workshop.' : ''),
-    items.length ? h('div', { class: 'list' }, items) : h('p', { class: 'empty' }, 'No one is standing on the dock. The water is still.'),
+    { class: 'section', 'data-tut': 'dock' },
+    h('h2', null, icon('bell'), 'The dock', h('span', { class: 'small muted push' }, `Bunks ${s.units.length}/${s.bunks}`)),
+    bunks <= 0 && s.dock.length ? h('p', { class: 'small', style: { color: 'var(--thin)' } }, `No free bunk.${isUnlocked(s, 'workshop') ? ' Brooklyn can build more in the Workshop.' : ''}`) : null,
+    items.length ? h('div', { class: 'list' }, items) : h('p', { class: 'empty' }, 'No one on the dock. The water is still.'),
   );
 }
 
@@ -132,20 +127,21 @@ function boardSection(app) {
   return h(
     'section',
     { class: 'section' },
-    h('h2', null, icon('fog'), "Janice's board"),
-    h('p', { class: 'small muted' }, `${plural(ready, 'unit')} ready. A watch passes when a squad returns.`),
+    h('h2', null, icon('fog'), "Janice's board", h('span', { class: 'small muted push' }, `${ready} ready`)),
     s.missions.length
       ? h('div', { class: 'list' }, s.missions.map((m) => missionCard(s, m, () => app.go('briefing', { missionId: m.id }))))
       : h('p', { class: 'empty' }, 'Nothing on the board. Keep watch.'),
-    h('button', { class: 'btn block', style: { marginTop: '10px' }, onclick: watch }, 'Keep watch (let a watch pass)'),
+    h('button', { class: 'btn block', style: { marginTop: '10px' }, onclick: watch, title: 'Let a watch pass without sending anyone' }, 'Keep watch'),
   );
 }
 
 function logSection(s) {
+  const intervals = s.ship.intervals.slice(-4);
   return h(
     'details',
     { class: 'section' },
     h('summary', null, 'Ledger: recent events'),
+    intervals.length ? h('p', { class: 'tiny dim' }, `Watches between bells: ${intervals.join(' · ')}.`) : null,
     h('ul', { class: 'log' }, s.log.slice(0, 12).map((l) => h('li', null, h('span', { class: 'w' }, `w${l.w}`), l.text))),
   );
 }

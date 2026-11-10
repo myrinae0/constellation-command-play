@@ -3,7 +3,6 @@
 import { h, icon, archMark } from '../dom.js';
 import { MISSION_TYPES } from '../../data/missions.js';
 import { ENEMIES } from '../../data/enemies.js';
-import { classOf } from '../../data/classes.js';
 import { districtDef } from '../../systems/city.js';
 import { assessOdds, autoSquad, SQUAD_SIZE, validateSquad } from '../../systems/missions.js';
 import { isAvailable, unitStatus } from '../../systems/roster.js';
@@ -44,12 +43,10 @@ export const briefingScreen = {
 
     const check = validateSquad(s, squad);
     const odds = squad.length ? assessOdds(s, mission, squad) : null;
-    const enemyList = [...new Set(mission.enemies)].map((id) => {
-      const e = ENEMIES[id];
-      const n = mission.enemies.filter((x) => x === id).length;
-      const name = e.boss ? d.boss.name : e.name;
-      return h('li', null, h('strong', null, `${name}${n > 1 ? ` ×${n}` : ''}`), h('span', { class: 'muted' }, ` · ${e.boss ? d.boss.blurb : e.blurb}`));
-    });
+    const kinds = [...new Set(mission.enemies)];
+    const nameOf = (id) => (ENEMIES[id].boss ? d.boss.name : ENEMIES[id].name);
+    const countOf = (id) => mission.enemies.filter((x) => x === id).length;
+    const enemyList = kinds.map((id) => h('li', null, h('strong', null, `${nameOf(id)}${countOf(id) > 1 ? ` ×${countOf(id)}` : ''}`), h('span', { class: 'muted' }, ` · ${ENEMIES[id].boss ? d.boss.blurb : ENEMIES[id].blurb}`)));
 
     const units = s.units.slice().sort((a, b) => Number(isAvailable(s, b)) - Number(isAvailable(s, a)));
     return h(
@@ -58,18 +55,24 @@ export const briefingScreen = {
       h('div', { class: 'row' }, h('button', { class: 'btn ghost icon-only', 'aria-label': 'Back to the Stacks', onclick: () => app.go('hub') }, icon('back')), h('h1', { style: { margin: 0 } }, type.name)),
       h('p', { class: 'muted', style: { margin: 0 } }, `${d.name} · danger ${mission.level}${mission.boss ? ` · ${d.boss.name} is here` : ''}`),
       speech(who, line),
-      h('div', { class: 'card' }, h('h3', null, 'In the fog'), h('ul', { class: 'small', style: { margin: 0, paddingLeft: '18px' } }, enemyList), h('p', { class: 'tiny dim', style: { margin: '6px 0 0' } }, rewardHint(mission))),
+      h(
+        'details',
+        { class: 'card' },
+        h('summary', null, `In the fog: ${mission.enemies.length} (${kinds.map(nameOf).join(', ')})`),
+        h('ul', { class: 'small', style: { margin: 0, paddingLeft: '18px' } }, enemyList),
+        h('p', { class: 'tiny dim', style: { margin: '6px 0 0' } }, rewardHint(mission)),
+      ),
       h(
         'section',
-        null,
-        h('div', { class: 'row spread' }, h('h2', { style: { margin: 0 } }, 'Squad'), odds ? h('span', { class: `chip ${odds.tone}` }, `Janice's read: ${odds.label}`) : null),
+        { 'data-tut': 'slots' },
+        h('div', { class: 'row spread' }, h('h2', { style: { margin: 0 } }, 'Squad'), odds ? h('span', { class: `chip ${odds.tone}`, title: "Janice's read on the odds" }, `Odds: ${odds.label}`) : null),
         h(
           'div',
           { class: 'slots', style: { marginTop: '8px' } },
           Array.from({ length: SQUAD_SIZE }, (_, i) => {
             const u = s.units.find((x) => x.id === squad[i]);
             return u
-              ? h('button', { class: 'slot filled btn', onclick: () => toggle(u.id), 'aria-label': `Remove ${u.name} from the squad` }, h('div', null, archMark(u.archetype, u.path), h('div', null, u.name), h('div', { class: 'tiny muted' }, classOf(u.archetype, u.path).name)))
+              ? h('button', { class: 'slot filled btn', onclick: () => toggle(u.id), 'aria-label': `Remove ${u.name} from the squad` }, h('div', null, archMark(u.archetype, u.path), h('div', null, u.name)))
               : h('div', { class: 'slot' }, 'Empty');
           }),
         ),
@@ -85,7 +88,7 @@ export const briefingScreen = {
             'button',
             { class: 'card tap pick', 'aria-pressed': String(chosen), disabled: !ready, onclick: () => toggle(u.id), 'aria-label': `${chosen ? 'Remove' : 'Add'} ${u.name}${ready ? '' : `, ${unitStatus(s, u)}`}` },
             unitSummary(s, u, { status: !ready }),
-            chosen ? h('span', { class: 'chip accent' }, 'In squad') : null,
+            chosen ? h('span', { class: 'chip accent' }, 'In') : null,
           );
         }),
       ),
@@ -93,7 +96,7 @@ export const briefingScreen = {
         'div',
         { class: 'sticky-actions' },
         h('button', { class: 'btn', onclick: () => { params.squad = autoSquad(s); app.refresh(); } }, "Janice's pick"),
-        h('button', { class: 'btn primary', disabled: !check.ok, onclick: deploy, 'aria-describedby': 'deploy-why' }, 'Deploy'),
+        h('button', { class: 'btn primary', 'data-tut': 'deploy', disabled: !check.ok, onclick: deploy, 'aria-describedby': 'deploy-why' }, 'Deploy'),
       ),
       !check.ok ? h('p', { id: 'deploy-why', class: 'tiny muted' }, check.reason) : null,
     );

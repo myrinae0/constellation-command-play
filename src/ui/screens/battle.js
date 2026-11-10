@@ -4,6 +4,7 @@
 
 import { h, icon } from '../dom.js';
 import { createBattleView } from '../battleView.js';
+import { createBattleLog } from '../battleLog.js';
 
 const SPEEDS = [1, 2, 4];
 
@@ -20,7 +21,8 @@ export const battleScreen = {
     let speed = SPEEDS.includes(app.state.settings.speed) ? app.state.settings.speed : 1;
 
     const canvas = h('canvas', { role: 'img', 'aria-label': 'The squad and the creatures in the fog. The log below describes each action.' });
-    const log = h('ol', { class: 'battle-log', role: 'log', 'aria-label': 'Battle log' });
+    // The last three lines show; tap the log to see all of it.
+    const log = createBattleLog({ visible: 3 });
     const playBtn = h('button', { class: 'btn icon-only', 'aria-label': 'Pause' }, icon('pause'));
     const speedBtn = h('button', { class: 'btn', 'aria-label': 'Change speed' }, `${speed}×`);
     const skipBtn = h('button', { class: 'btn' }, icon('skip'), 'Skip');
@@ -31,10 +33,7 @@ export const battleScreen = {
       reduced: app.reducedMotion(),
       speed,
       onEvent(i, ev) {
-        const cls = ev.type === 'end' ? 'end' : sides.get(ev.actor) === 'ally' ? 'ally' : '';
-        const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-        log.append(h('li', { class: cls }, ev.text));
-        if (nearBottom) log.scrollTop = log.scrollHeight;
+        log.append(ev.text, ev.type === 'end' ? 'end' : sides.get(ev.actor) === 'ally' ? 'ally' : '');
       },
       onEnd() {
         playBtn.disabled = true;
@@ -85,8 +84,8 @@ export const battleScreen = {
       { class: 'battle' },
       h('div', { class: 'head' }, h('h1', { style: { fontSize: '1rem', margin: 0 }, class: 'grow' }, missionTitle || 'Into the fog'), h('span', { class: 'chip' }, `Danger ${report.level}`)),
       canvas,
-      h('div', { class: 'controls' }, playBtn, speedBtn, skipBtn, h('span', { class: 'tiny dim grow', style: { textAlign: 'right' } }, 'Everyone comes back.')),
-      log,
+      h('div', { class: 'controls', 'data-tut': 'controls' }, playBtn, speedBtn, skipBtn, h('span', { class: 'tiny dim grow', style: { textAlign: 'right' } }, 'Everyone comes back.')),
+      log.el,
       h('div', { class: 'foot' }, debriefBtn),
     );
     return {

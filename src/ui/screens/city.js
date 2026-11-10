@@ -33,9 +33,8 @@ export const cityScreen = {
     const el = h(
       'div',
       { class: 'stack' },
-      h('h1', null, 'Nouveau'),
-      h('p', { class: 'small muted' }, 'Tap a district. Fog lifts as squads push it back, and the city changes shape when the Archive records a Truth.'),
-      fresh ? h('p', { class: 'notice small' }, 'New on the map since you last looked: highlighted.') : null,
+      h('div', { class: 'row spread' }, h('h1', { style: { margin: 0 } }, 'Nouveau'), h('span', { class: 'small muted' }, 'Tap a district')),
+      fresh ? h('p', { class: 'notice small' }, 'New since you last looked: highlighted.') : null,
       h('div', { class: 'city-layout' }, h('div', { class: 'map-wrap' }, map), h('div', { class: 'stack' }, detail(app, selected), districtList(s, select))),
     );
     return {
@@ -65,15 +64,19 @@ function detail(app, id) {
   ];
   const truths = s.truths.filter((t) => t.state === 'recorded' && truthDef(t).district === id);
   const missions = s.missions.filter((m) => m.district === id);
+  const about = [
+    h('p', { class: 'small' }, d.blurb),
+    h('p', { class: 'tiny muted' }, `${[...new Set(d.enemies)].length} kinds of creature, and ${d.boss.name} at the end.${ds.threatMod ? ` ${ds.threatMod < 0 ? 'Safer' : 'Harder'} because of a Truth.` : ''}`),
+    features.length ? h('div', null, h('h3', null, 'On the map'), h('ul', { class: 'small', style: { margin: 0, paddingLeft: '18px' } }, features.map((f) => h('li', null, f)))) : null,
+    truths.length ? h('div', null, h('h3', null, 'Truths recorded here'), truths.map((t) => h('p', { class: 'quote small' }, `“${truthDef(t).text}”`))) : null,
+  ];
   return h(
     'div',
     { class: 'card stack' },
     h('div', { class: 'row spread' }, h('h2', { style: { margin: 0 } }, d.name), h('span', { class: `chip ${ds.fog === 0 ? 'accent' : ''}` }, ds.fog === 0 ? '★ Clear' : `Fog ${ds.fog}%`)),
     bar(ds.fog / 100, '', `Fog in ${d.name}`),
-    h('p', { class: 'small' }, d.blurb),
-    h('p', { class: 'tiny muted' }, `Danger here now: ${districtLevel(s, id)}${ds.threatMod ? ` (${ds.threatMod < 0 ? 'safer' : 'harder'} because of a Truth)` : ''}. Creatures: ${[...new Set(d.enemies)].length} kinds, and ${d.boss.name} at the end.`),
-    features.length ? h('div', null, h('h3', null, 'On the map'), h('ul', { class: 'small', style: { margin: 0, paddingLeft: '18px' } }, features.map((f) => h('li', null, f)))) : null,
-    truths.length ? h('div', null, h('h3', null, 'Truths recorded here'), truths.map((t) => h('p', { class: 'quote small' }, `“${truthDef(t).text}”`))) : null,
+    h('p', { class: 'small muted', style: { margin: 0 } }, `Danger ${districtLevel(s, id)}`),
+    h('details', null, h('summary', null, 'About this district'), about),
     missions.length ? h('div', { class: 'list' }, h('h3', null, icon('fog'), ' On the board here'), missions.map((m) => missionCard(s, m, () => app.go('briefing', { missionId: m.id })))) : null,
   );
 }
